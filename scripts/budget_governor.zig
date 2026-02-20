@@ -120,11 +120,20 @@ pub fn main() !void {
     var stdout_writer = std.fs.File.stdout().writer(&.{});
     const stdout = &stdout_writer.interface;
     if (parsed.pretty) {
-        try std.json.Stringify.value(out, .{ .whitespace = .indent_2 }, stdout);
+        std.json.Stringify.value(out, .{ .whitespace = .indent_2 }, stdout) catch |err| {
+            if (isClosedPipeError(err)) return;
+            return err;
+        };
     } else {
-        try std.json.Stringify.value(out, .{}, stdout);
+        std.json.Stringify.value(out, .{}, stdout) catch |err| {
+            if (isClosedPipeError(err)) return;
+            return err;
+        };
     }
-    try stdout.writeAll("\n");
+    stdout.writeAll("\n") catch |err| {
+        if (isClosedPipeError(err)) return;
+        return err;
+    };
 }
 
 const ParsedArgs = struct {
@@ -132,6 +141,10 @@ const ParsedArgs = struct {
     pretty: bool = false,
     show_help: bool = false,
 };
+
+fn isClosedPipeError(err: anyerror) bool {
+    return err == error.WriteFailed or err == error.BrokenPipe;
+}
 
 fn parseArgs(allocator: std.mem.Allocator) !ParsedArgs {
     const argv = try std.process.argsAlloc(allocator);
